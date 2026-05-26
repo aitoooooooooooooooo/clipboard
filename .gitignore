@@ -1,0 +1,38 @@
+# APM runtime artifacts
+.apm/bus/
+.apm/worktrees/
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# Build output
+build/
+dist/
+/bin/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Wails
+frontend/dist/
+
+# Database files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
