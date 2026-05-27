@@ -18,6 +18,10 @@ export function GeneratePairingCode() {
   return window['go']['gui']['App']['GeneratePairingCode']();
 }
 
+export function GetContext() {
+  return window['go']['gui']['App']['GetContext']();
+}
+
 export function GetDeviceID() {
   return window['go']['gui']['App']['GetDeviceID']();
 }
@@ -36,6 +40,10 @@ export function IsSyncActive() {
 
 export function SearchHistory(arg1) {
   return window['go']['gui']['App']['SearchHistory'](arg1);
+}
+
+export function ShutdownTray() {
+  return window['go']['gui']['App']['ShutdownTray']();
 }
 
 export function ToggleSync(arg1) {

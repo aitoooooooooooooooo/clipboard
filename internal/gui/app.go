@@ -18,16 +18,18 @@ import (
 
 // App 是 Wails 应用的后端绑定
 type App struct {
-	ctx        context.Context
-	storage    *storage.DB
-	watcher    *clipboard.Watcher
-	syncMgr    *network.SyncManager
-	pairingMgr *pairing.PairingManager
-	connMgr    *network.ConnectionManager
-	discovery  *network.Discovery
-	deviceID   string
-	dataDir    string
-	syncActive bool
+	ctx            context.Context
+	storage        *storage.DB
+	watcher        *clipboard.Watcher
+	syncMgr        *network.SyncManager
+	pairingMgr     *pairing.PairingManager
+	connMgr        *network.ConnectionManager
+	discovery      *network.Discovery
+	deviceID       string
+	dataDir        string
+	syncActive     bool
+	tray           TrayInterface
+	syncMenuItemID int
 }
 
 // NewApp 创建应用实例
@@ -44,6 +46,9 @@ func (a *App) Startup(ctx context.Context) {
 		slog.Error("服务初始化失败", "error", err)
 		return
 	}
+
+	// 初始化系统托盘
+	a.setupTray()
 
 	slog.Info("应用启动完成", "device_id", a.deviceID)
 }
@@ -234,6 +239,11 @@ func (a *App) IsSyncActive() bool {
 }
 
 // --- 应用信息 ---
+
+// GetContext 获取应用上下文（供托盘菜单使用）
+func (a *App) GetContext() context.Context {
+	return a.ctx
+}
 
 // GetDeviceID 获取本机设备 ID
 func (a *App) GetDeviceID() string {
