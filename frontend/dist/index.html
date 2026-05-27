@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClipboardSync</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        /* 标题栏 */
+        .header {
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .header .device-id {
+            font-size: 12px;
+            color: #888;
+        }
+        /* 工具栏 */
+        .toolbar {
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 8px 16px;
+            display: flex;
+            gap: 8px;
+        }
+        .toolbar input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+        }
+        .toolbar input:focus {
+            border-color: #4a90d9;
+        }
+        .toolbar button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            background: #4a90d9;
+            color: #fff;
+        }
+        .toolbar button:hover {
+            background: #3a7bc8;
+        }
+        .toolbar button.secondary {
+            background: #eee;
+            color: #333;
+        }
+        .toolbar button.secondary:hover {
+            background: #ddd;
+        }
+        /* 主内容区 */
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .history-item {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .history-item .content-preview {
+            flex: 1;
+            font-size: 14px;
+            line-height: 1.4;
+            word-break: break-all;
+            max-height: 60px;
+            overflow: hidden;
+        }
+        .history-item .meta {
+            font-size: 12px;
+            color: #888;
+            white-space: nowrap;
+            margin-left: 12px;
+        }
+        .history-item .actions {
+            display: flex;
+            gap: 4px;
+            margin-left: 8px;
+        }
+        .history-item .actions button {
+            padding: 4px 8px;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            background: #eee;
+            color: #333;
+        }
+        .history-item .actions button:hover {
+            background: #ddd;
+        }
+        .history-item .actions button.danger {
+            background: #fee;
+            color: #c33;
+        }
+        .history-item .actions button.danger:hover {
+            background: #fdd;
+        }
+        /* 状态栏 */
+        .statusbar {
+            background: #fff;
+            border-top: 1px solid #e0e0e0;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #888;
+        }
+        .statusbar .sync-status {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .statusbar .sync-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ccc;
+        }
+        .statusbar .sync-dot.active {
+            background: #4caf50;
+        }
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 48px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>ClipboardSync</h1>
+        <span class="device-id" id="deviceID">设备 ID: 加载中...</span>
+    </div>
+
+    <div class="toolbar">
+        <input type="text" id="searchInput" placeholder="搜索剪贴板历史...">
+        <button onclick="searchHistory()">搜索</button>
+        <button class="secondary" onclick="loadHistory()">刷新</button>
+        <button class="secondary" onclick="clearHistory()">清空</button>
+    </div>
+
+    <div class="content">
+        <div class="history-list" id="historyList">
+            <div class="empty-state">加载中...</div>
+        </div>
+    </div>
+
+    <div class="statusbar">
+        <div class="sync-status">
+            <span class="sync-dot" id="syncDot"></span>
+            <span id="syncStatus">同步未启动</span>
+        </div>
+        <div>
+            <button onclick="toggleSync()" id="syncBtn" style="padding:4px 12px;border:none;border-radius:4px;background:#4a90d9;color:#fff;font-size:12px;cursor:pointer">启用同步</button>
+        </div>
+    </div>
+
+    <script src="/wails/runtime.js"></script>
+    <script>
+        let syncActive = false;
+
+        // 加载设备 ID
+        async function loadDeviceID() {
+            try {
+                const id = await window.go.app.App.GetDeviceID();
+                document.getElementById('deviceID').textContent = '设备 ID: ' + id.substring(0, 8) + '...';
+            } catch (e) {
+                console.error('获取设备 ID 失败:', e);
+            }
+        }
+
+        // 加载历史
+        async function loadHistory() {
+            try {
+                const entries = await window.go.app.App.GetHistory(50);
+                renderHistory(entries || []);
+            } catch (e) {
+                console.error('获取历史失败:', e);
+                document.getElementById('historyList').innerHTML = '<div class="empty-state">加载失败</div>';
+            }
+        }
+
+        // 搜索历史
+        async function searchHistory() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) {
+                loadHistory();
+                return;
+            }
+            try {
+                const entries = await window.go.app.App.SearchHistory(query);
+                renderHistory(entries || []);
+            } catch (e) {
+                console.error('搜索失败:', e);
+            }
+        }
+
+        // 渲染历史列表
+        function renderHistory(entries) {
+            const list = document.getElementById('historyList');
+            if (entries.length === 0) {
+                list.innerHTML = '<div class="empty-state">暂无剪贴板历史</div>';
+                return;
+            }
+            list.innerHTML = entries.map(entry => {
+                const time = new Date(entry.timestamp).toLocaleString('zh-CN');
+                const preview = entry.content_type === 'text'
+                    ? escapeHtml(atob(entry.payload || ''))
+                    : '[' + entry.content_type + ']';
+                return '<div class="history-item">' +
+                    '<div class="content-preview">' + preview + '</div>' +
+                    '<div class="meta">' + time + '</div>' +
+                    '<div class="actions">' +
+                    '<button class="danger" onclick="deleteEntry(\'' + entry.id + '\')">删除</button>' +
+                    '</div>' +
+                    '</div>';
+            }).join('');
+        }
+
+        // 删除条目
+        async function deleteEntry(id) {
+            try {
+                await window.go.app.App.DeleteEntry(id);
+                loadHistory();
+            } catch (e) {
+                console.error('删除失败:', e);
+            }
+        }
+
+        // 清空历史
+        async function clearHistory() {
+            if (!confirm('确定要清空所有剪贴板历史吗？')) return;
+            try {
+                await window.go.app.App.ClearHistory();
+                loadHistory();
+            } catch (e) {
+                console.error('清空失败:', e);
+            }
+        }
+
+        // 切换同步
+        async function toggleSync() {
+            try {
+                syncActive = !syncActive;
+                await window.go.app.App.ToggleSync(syncActive);
+                updateSyncUI();
+            } catch (e) {
+                console.error('切换同步失败:', e);
+                syncActive = !syncActive;
+            }
+        }
+
+        // 更新同步状态 UI
+        function updateSyncUI() {
+            const dot = document.getElementById('syncDot');
+            const status = document.getElementById('syncStatus');
+            const btn = document.getElementById('syncBtn');
+            if (syncActive) {
+                dot.classList.add('active');
+                status.textContent = '同步已启用';
+                btn.textContent = '禁用同步';
+            } else {
+                dot.classList.remove('active');
+                status.textContent = '同步未启动';
+                btn.textContent = '启用同步';
+            }
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // 搜索框回车触发
+        document.getElementById('searchInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') searchHistory();
+        });
+
+        // 初始化
+        loadDeviceID();
+        loadHistory();
+    </script>
+</body>
+</html>

@@ -14,7 +14,7 @@ vendor/
 
 # Build output
 build/
-dist/
+/dist/
 /bin/
 
 # IDE
@@ -28,8 +28,7 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Wails
-frontend/dist/
+# Wails build output (dist/ 包含源文件，不忽略)
 
 # Database files
 *.db
