@@ -3,7 +3,7 @@ package storage
 import (
 	"fmt"
 
-	"clipboardsync/pkg/models"
+	"github.com/clipboardsync/clipboardsync/pkg/models"
 )
 
 // SaveDevice 保存或更新设备信息

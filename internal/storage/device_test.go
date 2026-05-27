@@ -3,7 +3,7 @@ package storage
 import (
 	"testing"
 
-	"clipboardsync/pkg/models"
+	"github.com/clipboardsync/clipboardsync/pkg/models"
 )
 
 func TestSaveDevice(t *testing.T) {
