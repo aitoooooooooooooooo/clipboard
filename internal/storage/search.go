@@ -3,7 +3,7 @@ package storage
 import (
 	"fmt"
 
-	"clipboardsync/pkg/models"
+	"github.com/clipboardsync/clipboardsync/pkg/models"
 )
 
 // Search 在文本条目中搜索关键词（LIKE 查询）

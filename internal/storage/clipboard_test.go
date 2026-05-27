@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"clipboardsync/pkg/models"
+	"github.com/clipboardsync/clipboardsync/pkg/models"
 )
 
 func setupTestDB(t *testing.T) (*DB, func()) {

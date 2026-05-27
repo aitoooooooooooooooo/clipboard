@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"clipboardsync/pkg/models"
+	"github.com/clipboardsync/clipboardsync/pkg/models"
 )
 
 func TestEvict(t *testing.T) {

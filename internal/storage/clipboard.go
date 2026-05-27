@@ -3,7 +3,7 @@ package storage
 import (
 	"fmt"
 
-	"clipboardsync/pkg/models"
+	"github.com/clipboardsync/clipboardsync/pkg/models"
 
 	"github.com/mattn/go-sqlite3"
 )
