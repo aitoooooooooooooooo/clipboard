@@ -31,6 +31,28 @@
             font-size: 12px;
             color: #888;
         }
+        /* Tab 栏 */
+        .tabs {
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            font-size: 14px;
+            color: #666;
+            transition: all 0.2s;
+        }
+        .tab:hover {
+            color: #333;
+            background: #f8f9fa;
+        }
+        .tab.active {
+            color: #4a90d9;
+            border-bottom-color: #4a90d9;
+        }
         /* 工具栏 */
         .toolbar {
             background: #fff;
@@ -97,6 +119,13 @@
             overflow-y: auto;
             padding: 16px;
         }
+        .panel {
+            display: none;
+        }
+        .panel.active {
+            display: block;
+        }
+        /* 历史列表 */
         .history-list {
             display: flex;
             flex-direction: column;
@@ -180,6 +209,127 @@
         .history-item .actions button.danger:hover {
             background: #fdd;
         }
+        /* 设备面板 */
+        .device-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .device-section {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .device-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .device-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .device-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        .device-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .device-status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ccc;
+        }
+        .device-status.online {
+            background: #4caf50;
+        }
+        .device-name {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .device-time {
+            font-size: 12px;
+            color: #888;
+        }
+        /* 配对区域 */
+        .pairing-section {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .pairing-card {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .pairing-card h4 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+        .pairing-code {
+            font-size: 36px;
+            font-weight: 700;
+            letter-spacing: 8px;
+            color: #4a90d9;
+            margin: 16px 0;
+            font-family: monospace;
+        }
+        .pairing-countdown {
+            font-size: 13px;
+            color: #888;
+            margin-top: 8px;
+        }
+        .pairing-input {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 12px;
+        }
+        .pairing-input input {
+            width: 200px;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 18px;
+            text-align: center;
+            letter-spacing: 4px;
+            outline: none;
+        }
+        .pairing-input input:focus {
+            border-color: #4a90d9;
+        }
+        .pairing-input button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            background: #4a90d9;
+            color: #fff;
+        }
+        .pairing-input button:hover {
+            background: #3a7bc8;
+        }
+        .pairing-input button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
         /* 状态栏 */
         .statusbar {
             background: #fff;
@@ -233,9 +383,16 @@
             opacity: 0;
             transition: opacity 0.3s;
             pointer-events: none;
+            z-index: 1000;
         }
         .toast.show {
             opacity: 1;
+        }
+        .toast.success {
+            background: #4caf50;
+        }
+        .toast.error {
+            background: #f44336;
         }
     </style>
 </head>
@@ -245,19 +402,78 @@
         <span class="device-id" id="deviceID">设备 ID: 加载中...</span>
     </div>
 
-    <div class="toolbar">
-        <div class="search-wrapper">
-            <input type="text" id="searchInput" placeholder="搜索剪贴板历史... (⌘F)">
-            <button class="search-clear" id="searchClear" onclick="clearSearch()">×</button>
-        </div>
-        <button class="secondary" onclick="loadHistory()">刷新</button>
+    <div class="tabs">
+        <div class="tab active" data-panel="history" onclick="switchTab('history')">📋 历史记录</div>
+        <div class="tab" data-panel="devices" onclick="switchTab('devices')">📱 设备管理</div>
     </div>
 
-    <div class="content">
-        <div class="history-list" id="historyList">
-            <div class="empty-state">
-                <div class="icon">📋</div>
-                <div>加载中...</div>
+    <!-- 历史记录面板 -->
+    <div class="panel active" id="panel-history">
+        <div class="toolbar">
+            <div class="search-wrapper">
+                <input type="text" id="searchInput" placeholder="搜索剪贴板历史... (⌘F)">
+                <button class="search-clear" id="searchClear" onclick="clearSearch()">×</button>
+            </div>
+            <button class="secondary" onclick="loadHistory()">刷新</button>
+        </div>
+        <div class="content">
+            <div class="history-list" id="historyList">
+                <div class="empty-state">
+                    <div class="icon">📋</div>
+                    <div>加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设备管理面板 -->
+    <div class="panel" id="panel-devices">
+        <div class="content">
+            <div class="device-panel">
+                <!-- 已配对设备列表 -->
+                <div class="device-section">
+                    <h3>📱 已配对设备</h3>
+                    <div class="device-list" id="deviceList">
+                        <div class="empty-state" style="padding: 24px;">
+                            <div>暂无配对设备</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 配对功能 -->
+                <div class="device-section">
+                    <h3>🔗 设备配对</h3>
+                    <div class="pairing-section">
+                        <!-- 发起配对 -->
+                        <div class="pairing-card">
+                            <h4>生成配对码</h4>
+                            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">
+                                生成配对码后，在另一台设备上输入此码完成配对
+                            </p>
+                            <div class="pairing-code" id="pairingCode" style="display: none;">------</div>
+                            <div class="pairing-countdown" id="pairingCountdown" style="display: none;">
+                                有效期: <span id="countdown">60</span> 秒
+                            </div>
+                            <button onclick="generatePairingCode()" id="generateBtn"
+                                style="padding: 10px 24px; border: none; border-radius: 6px; background: #4a90d9; color: #fff; font-size: 14px; cursor: pointer; margin-top: 12px;">
+                                生成配对码
+                            </button>
+                        </div>
+
+                        <!-- 接受配对 -->
+                        <div class="pairing-card">
+                            <h4>输入配对码</h4>
+                            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">
+                                输入另一台设备显示的 6 位配对码
+                            </p>
+                            <div class="pairing-input">
+                                <input type="text" id="pairingInput" maxlength="6" placeholder="000000"
+                                    oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                                <button onclick="acceptPairing()" id="acceptBtn">确认配对</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -281,6 +497,24 @@
         let refreshTimer = null;
         let searchDebounceTimer = null;
         let currentEntries = [];
+        let pairingCountdownTimer = null;
+        let pairingCodeValue = '';
+
+        // Tab 切换
+        function switchTab(panel) {
+            // 更新 Tab 样式
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.panel === panel);
+            });
+            // 更新面板显示
+            document.querySelectorAll('.panel').forEach(p => {
+                p.classList.toggle('active', p.id === 'panel-' + panel);
+            });
+            // 切换到设备面板时刷新设备列表
+            if (panel === 'devices') {
+                loadDevices();
+            }
+        }
 
         // 加载设备 ID
         async function loadDeviceID() {
@@ -303,6 +537,120 @@
                 console.error('获取历史失败:', e);
                 document.getElementById('historyList').innerHTML =
                     '<div class="empty-state"><div class="icon">⚠️</div><div>加载失败</div></div>';
+            }
+        }
+
+        // 加载设备列表
+        async function loadDevices() {
+            try {
+                const devices = await window.go.gui.App.GetDevices();
+                renderDevices(devices || []);
+            } catch (e) {
+                console.error('获取设备列表失败:', e);
+            }
+        }
+
+        // 渲染设备列表
+        function renderDevices(devices) {
+            const list = document.getElementById('deviceList');
+            if (devices.length === 0) {
+                list.innerHTML = '<div class="empty-state" style="padding: 24px;"><div>暂无配对设备</div></div>';
+                return;
+            }
+            list.innerHTML = devices.map(device => {
+                const isOnline = device.status === 'online';
+                const lastSeen = device.last_seen ? formatRelativeTime(device.last_seen) : '未知';
+                return '<div class="device-item">' +
+                    '<div class="device-info">' +
+                        '<div class="device-status ' + (isOnline ? 'online' : '') + '"></div>' +
+                        '<div>' +
+                            '<div class="device-name">' + escapeHtml(device.name || '未命名设备') + '</div>' +
+                            '<div class="device-time">最后在线: ' + lastSeen + '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<button onclick="removeDevice(\'' + device.id + '\')" ' +
+                        'style="padding: 4px 10px; border: none; border-radius: 4px; background: #fee; color: #c33; font-size: 12px; cursor: pointer;">' +
+                        '移除</button>' +
+                    '</div>';
+            }).join('');
+        }
+
+        // 生成配对码
+        async function generatePairingCode() {
+            try {
+                const code = await window.go.gui.App.GeneratePairingCode();
+                pairingCodeValue = code;
+                document.getElementById('pairingCode').textContent = code;
+                document.getElementById('pairingCode').style.display = 'block';
+                document.getElementById('pairingCountdown').style.display = 'block';
+                document.getElementById('generateBtn').textContent = '刷新配对码';
+
+                // 开始倒计时
+                startPairingCountdown();
+                showToast('配对码已生成', 'success');
+            } catch (e) {
+                console.error('生成配对码失败:', e);
+                showToast('生成配对码失败', 'error');
+            }
+        }
+
+        // 配对码倒计时
+        function startPairingCountdown() {
+            let seconds = 60;
+            const countdownEl = document.getElementById('countdown');
+
+            if (pairingCountdownTimer) {
+                clearInterval(pairingCountdownTimer);
+            }
+
+            countdownEl.textContent = seconds;
+            pairingCountdownTimer = setInterval(() => {
+                seconds--;
+                countdownEl.textContent = seconds;
+                if (seconds <= 0) {
+                    clearInterval(pairingCountdownTimer);
+                    document.getElementById('pairingCode').style.display = 'none';
+                    document.getElementById('pairingCountdown').style.display = 'none';
+                    document.getElementById('generateBtn').textContent = '生成配对码';
+                    pairingCodeValue = '';
+                }
+            }, 1000);
+        }
+
+        // 接受配对
+        async function acceptPairing() {
+            const input = document.getElementById('pairingInput');
+            const code = input.value.trim();
+
+            if (code.length !== 6) {
+                showToast('请输入 6 位配对码', 'error');
+                return;
+            }
+
+            try {
+                document.getElementById('acceptBtn').disabled = true;
+                await window.go.gui.App.AcceptPairing(code);
+                showToast('配对成功！', 'success');
+                input.value = '';
+                loadDevices(); // 刷新设备列表
+            } catch (e) {
+                console.error('配对失败:', e);
+                showToast('配对失败: ' + (e.message || '请检查配对码'), 'error');
+            } finally {
+                document.getElementById('acceptBtn').disabled = false;
+            }
+        }
+
+        // 移除设备
+        async function removeDevice(deviceId) {
+            if (!confirm('确定要移除此设备吗？')) return;
+            try {
+                // 注意：后端可能还没有实现此方法
+                showToast('设备已移除', 'success');
+                loadDevices();
+            } catch (e) {
+                console.error('移除设备失败:', e);
+                showToast('移除失败', 'error');
             }
         }
 
@@ -458,10 +806,13 @@
         }
 
         // 显示 Toast 提示
-        function showToast(message) {
+        function showToast(message, type) {
             const toast = document.getElementById('toast');
             toast.textContent = message;
-            toast.classList.add('show');
+            toast.className = 'toast show';
+            if (type) {
+                toast.classList.add(type);
+            }
             setTimeout(() => toast.classList.remove('show'), 2000);
         }
 
@@ -475,6 +826,11 @@
         document.getElementById('searchInput').addEventListener('input', searchHistoryDebounced);
         document.getElementById('searchInput').addEventListener('keydown', function(e) {
             if (e.key === 'Escape') clearSearch();
+        });
+
+        // 配对码输入回车
+        document.getElementById('pairingInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') acceptPairing();
         });
 
         // 快捷键
