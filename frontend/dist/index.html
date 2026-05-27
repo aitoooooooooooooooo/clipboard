@@ -38,17 +38,38 @@
             padding: 8px 16px;
             display: flex;
             gap: 8px;
+            align-items: center;
         }
-        .toolbar input {
+        .search-wrapper {
             flex: 1;
-            padding: 8px 12px;
+            position: relative;
+        }
+        .search-wrapper input {
+            width: 100%;
+            padding: 8px 32px 8px 12px;
             border: 1px solid #ddd;
             border-radius: 6px;
             font-size: 14px;
             outline: none;
         }
-        .toolbar input:focus {
+        .search-wrapper input:focus {
             border-color: #4a90d9;
+        }
+        .search-clear {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #999;
+            font-size: 16px;
+            display: none;
+            padding: 2px;
+        }
+        .search-clear.visible {
+            display: block;
         }
         .toolbar button {
             padding: 8px 16px;
@@ -58,6 +79,7 @@
             cursor: pointer;
             background: #4a90d9;
             color: #fff;
+            white-space: nowrap;
         }
         .toolbar button:hover {
             background: #3a7bc8;
@@ -88,6 +110,10 @@
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
+            transition: background 0.15s;
+        }
+        .history-item:hover {
+            background: #f8f9fa;
         }
         .history-item .content-preview {
             flex: 1;
@@ -97,28 +123,55 @@
             max-height: 60px;
             overflow: hidden;
         }
+        .history-item .content-preview.type-image {
+            color: #666;
+            font-style: italic;
+        }
+        .history-item .content-preview.type-file {
+            color: #555;
+        }
         .history-item .meta {
             font-size: 12px;
             color: #888;
             white-space: nowrap;
             margin-left: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+        .history-item .meta .source {
+            color: #aaa;
         }
         .history-item .actions {
             display: flex;
             gap: 4px;
             margin-left: 8px;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .history-item:hover .actions {
+            opacity: 1;
         }
         .history-item .actions button {
-            padding: 4px 8px;
+            padding: 4px 10px;
             border: none;
             border-radius: 4px;
             font-size: 12px;
             cursor: pointer;
             background: #eee;
             color: #333;
+            transition: background 0.15s;
         }
         .history-item .actions button:hover {
             background: #ddd;
+        }
+        .history-item .actions button.primary {
+            background: #4a90d9;
+            color: #fff;
+        }
+        .history-item .actions button.primary:hover {
+            background: #3a7bc8;
         }
         .history-item .actions button.danger {
             background: #fee;
@@ -151,11 +204,38 @@
         .statusbar .sync-dot.active {
             background: #4caf50;
         }
+        .statusbar .right-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
         /* 空状态 */
         .empty-state {
             text-align: center;
             padding: 48px;
             color: #888;
+        }
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        /* Toast 提示 */
+        .toast {
+            position: fixed;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .toast.show {
+            opacity: 1;
         }
     </style>
 </head>
@@ -166,15 +246,19 @@
     </div>
 
     <div class="toolbar">
-        <input type="text" id="searchInput" placeholder="搜索剪贴板历史...">
-        <button onclick="searchHistory()">搜索</button>
+        <div class="search-wrapper">
+            <input type="text" id="searchInput" placeholder="搜索剪贴板历史... (⌘F)">
+            <button class="search-clear" id="searchClear" onclick="clearSearch()">×</button>
+        </div>
         <button class="secondary" onclick="loadHistory()">刷新</button>
-        <button class="secondary" onclick="clearHistory()">清空</button>
     </div>
 
     <div class="content">
         <div class="history-list" id="historyList">
-            <div class="empty-state">加载中...</div>
+            <div class="empty-state">
+                <div class="icon">📋</div>
+                <div>加载中...</div>
+            </div>
         </div>
     </div>
 
@@ -183,19 +267,25 @@
             <span class="sync-dot" id="syncDot"></span>
             <span id="syncStatus">同步未启动</span>
         </div>
-        <div>
+        <div class="right-section">
+            <span id="entryCount">0 条记录</span>
             <button onclick="toggleSync()" id="syncBtn" style="padding:4px 12px;border:none;border-radius:4px;background:#4a90d9;color:#fff;font-size:12px;cursor:pointer">启用同步</button>
         </div>
     </div>
 
+    <div class="toast" id="toast"></div>
+
     <script src="/wails/runtime.js"></script>
     <script>
         let syncActive = false;
+        let refreshTimer = null;
+        let searchDebounceTimer = null;
+        let currentEntries = [];
 
         // 加载设备 ID
         async function loadDeviceID() {
             try {
-                const id = await window.go.app.App.GetDeviceID();
+                const id = await window.go.gui.App.GetDeviceID();
                 document.getElementById('deviceID').textContent = '设备 ID: ' + id.substring(0, 8) + '...';
             } catch (e) {
                 console.error('获取设备 ID 失败:', e);
@@ -205,69 +295,119 @@
         // 加载历史
         async function loadHistory() {
             try {
-                const entries = await window.go.app.App.GetHistory(50);
-                renderHistory(entries || []);
+                const entries = await window.go.gui.App.GetHistory(100);
+                currentEntries = entries || [];
+                renderHistory(currentEntries);
+                updateEntryCount();
             } catch (e) {
                 console.error('获取历史失败:', e);
-                document.getElementById('historyList').innerHTML = '<div class="empty-state">加载失败</div>';
+                document.getElementById('historyList').innerHTML =
+                    '<div class="empty-state"><div class="icon">⚠️</div><div>加载失败</div></div>';
             }
         }
 
-        // 搜索历史
-        async function searchHistory() {
+        // 搜索历史（带防抖）
+        function searchHistoryDebounced() {
+            clearTimeout(searchDebounceTimer);
             const query = document.getElementById('searchInput').value.trim();
+
+            // 更新清除按钮显示
+            document.getElementById('searchClear').classList.toggle('visible', query.length > 0);
+
             if (!query) {
                 loadHistory();
                 return;
             }
-            try {
-                const entries = await window.go.app.App.SearchHistory(query);
-                renderHistory(entries || []);
-            } catch (e) {
-                console.error('搜索失败:', e);
-            }
+
+            searchDebounceTimer = setTimeout(async () => {
+                try {
+                    const entries = await window.go.gui.App.SearchHistory(query);
+                    currentEntries = entries || [];
+                    renderHistory(currentEntries);
+                    updateEntryCount();
+                } catch (e) {
+                    console.error('搜索失败:', e);
+                }
+            }, 300);
+        }
+
+        // 清空搜索
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('searchClear').classList.remove('visible');
+            loadHistory();
         }
 
         // 渲染历史列表
         function renderHistory(entries) {
             const list = document.getElementById('historyList');
             if (entries.length === 0) {
-                list.innerHTML = '<div class="empty-state">暂无剪贴板历史</div>';
+                list.innerHTML = '<div class="empty-state"><div class="icon">📋</div><div>暂无剪贴板历史</div></div>';
                 return;
             }
             list.innerHTML = entries.map(entry => {
-                const time = new Date(entry.timestamp).toLocaleString('zh-CN');
-                const preview = entry.content_type === 'text'
-                    ? escapeHtml(atob(entry.payload || ''))
-                    : '[' + entry.content_type + ']';
+                const time = formatRelativeTime(entry.timestamp);
+                const source = entry.source_device ? entry.source_device.substring(0, 8) + '...' : '本地';
+                let preview = '';
+                let typeClass = '';
+
+                if (entry.content_type === 'text') {
+                    const text = atob(entry.payload || '');
+                    preview = escapeHtml(text.substring(0, 200));
+                    if (text.length > 200) preview += '...';
+                } else if (entry.content_type === 'image') {
+                    const size = entry.payload ? Math.round(atob(entry.payload).length * 0.75 / 1024) : 0;
+                    preview = '🖼️ 图片 (' + size + ' KB)';
+                    typeClass = 'type-image';
+                } else if (entry.content_type === 'file') {
+                    preview = '📄 ' + escapeHtml(entry.payload || '文件');
+                    typeClass = 'type-file';
+                } else {
+                    preview = '[' + entry.content_type + ']';
+                }
+
                 return '<div class="history-item">' +
-                    '<div class="content-preview">' + preview + '</div>' +
-                    '<div class="meta">' + time + '</div>' +
+                    '<div class="content-preview ' + typeClass + '">' + preview + '</div>' +
+                    '<div class="meta">' +
+                        '<span>' + time + '</span>' +
+                        '<span class="source">' + source + '</span>' +
+                    '</div>' +
                     '<div class="actions">' +
-                    '<button class="danger" onclick="deleteEntry(\'' + entry.id + '\')">删除</button>' +
+                        '<button class="primary" onclick="copyEntry(\'' + entry.id + '\')">复制</button>' +
+                        '<button class="danger" onclick="deleteEntry(\'' + entry.id + '\')">删除</button>' +
                     '</div>' +
                     '</div>';
             }).join('');
         }
 
-        // 删除条目
-        async function deleteEntry(id) {
+        // 复制条目到剪贴板
+        async function copyEntry(id) {
             try {
-                await window.go.app.App.DeleteEntry(id);
-                loadHistory();
+                const entry = currentEntries.find(e => e.id === id);
+                if (!entry) return;
+
+                if (entry.content_type === 'text') {
+                    const text = atob(entry.payload || '');
+                    await navigator.clipboard.writeText(text);
+                    showToast('已复制到剪贴板');
+                } else {
+                    showToast('暂不支持复制此类型');
+                }
             } catch (e) {
-                console.error('删除失败:', e);
+                console.error('复制失败:', e);
+                showToast('复制失败');
             }
         }
 
-        // 清空历史
-        async function clearHistory() {
-            if (!confirm('确定要清空所有剪贴板历史吗？')) return;
+        // 删除条目
+        async function deleteEntry(id) {
             try {
-                await window.go.app.App.ClearHistory();
+                await window.go.gui.App.DeleteEntry(id);
                 loadHistory();
+                showToast('已删除');
             } catch (e) {
-                console.error('清空失败:', e);
+                console.error('删除失败:', e);
+                showToast('删除失败');
             }
         }
 
@@ -275,7 +415,7 @@
         async function toggleSync() {
             try {
                 syncActive = !syncActive;
-                await window.go.app.App.ToggleSync(syncActive);
+                await window.go.gui.App.ToggleSync(syncActive);
                 updateSyncUI();
             } catch (e) {
                 console.error('切换同步失败:', e);
@@ -299,20 +439,62 @@
             }
         }
 
+        // 更新条目计数
+        function updateEntryCount() {
+            document.getElementById('entryCount').textContent = currentEntries.length + ' 条记录';
+        }
+
+        // 格式化相对时间
+        function formatRelativeTime(timestamp) {
+            const now = new Date();
+            const date = new Date(timestamp);
+            const diff = Math.floor((now - date) / 1000);
+
+            if (diff < 60) return '刚刚';
+            if (diff < 3600) return Math.floor(diff / 60) + ' 分钟前';
+            if (diff < 86400) return Math.floor(diff / 3600) + ' 小时前';
+            if (diff < 604800) return Math.floor(diff / 86400) + ' 天前';
+            return date.toLocaleDateString('zh-CN');
+        }
+
+        // 显示 Toast 提示
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2000);
+        }
+
         function escapeHtml(str) {
             const div = document.createElement('div');
             div.textContent = str;
             return div.innerHTML;
         }
 
-        // 搜索框回车触发
+        // 搜索框事件
+        document.getElementById('searchInput').addEventListener('input', searchHistoryDebounced);
         document.getElementById('searchInput').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') searchHistory();
+            if (e.key === 'Escape') clearSearch();
         });
+
+        // 快捷键
+        document.addEventListener('keydown', function(e) {
+            // Cmd/Ctrl + F 聚焦搜索栏
+            if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+                e.preventDefault();
+                document.getElementById('searchInput').focus();
+            }
+        });
+
+        // 自动刷新
+        function startAutoRefresh() {
+            refreshTimer = setInterval(loadHistory, 5000);
+        }
 
         // 初始化
         loadDeviceID();
         loadHistory();
+        startAutoRefresh();
     </script>
 </body>
 </html>
