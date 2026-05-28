@@ -1,3 +1,24 @@
+export namespace gui {
+	
+	export class DiscoveredDevice {
+	    device_id: string;
+	    address: string;
+	    port: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiscoveredDevice(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.device_id = source["device_id"];
+	        this.address = source["address"];
+	        this.port = source["port"];
+	    }
+	}
+
+}
+
 export namespace models {
 	
 	export class ClipboardEntry {

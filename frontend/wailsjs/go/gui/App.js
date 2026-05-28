@@ -30,8 +30,16 @@ export function GetDevices() {
   return window['go']['gui']['App']['GetDevices']();
 }
 
+export function GetDiscoveredDevices() {
+  return window['go']['gui']['App']['GetDiscoveredDevices']();
+}
+
 export function GetHistory(arg1) {
   return window['go']['gui']['App']['GetHistory'](arg1);
+}
+
+export function GetStartupError() {
+  return window['go']['gui']['App']['GetStartupError']();
 }
 
 export function IsSyncActive() {

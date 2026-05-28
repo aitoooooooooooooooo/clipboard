@@ -23,7 +23,7 @@ APM_RULES {
 
 ## Code Organization
 
-- `cmd/clipboardsync/` — application entry point only.
+- `main.go` — Wails v2 应用入口（Wails 要求入口在项目根目录）。
 - `internal/` — private packages, not importable externally.
 - `pkg/` — shared interfaces and models (if needed across packages).
 - Each package has a single clear responsibility.

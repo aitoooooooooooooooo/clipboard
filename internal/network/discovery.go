@@ -76,7 +76,7 @@ func (d *Discovery) Browse() ([]*PeerInfo, error) {
 	var peers []*PeerInfo
 	var mu sync.Mutex
 
-	ctx, cancel := context.WithTimeout(d.ctx, 3*time.Second)
+	ctx, cancel := context.WithTimeout(d.ctx, 5*time.Second)
 	defer cancel()
 
 	go func(results <-chan *zeroconf.ServiceEntry) {

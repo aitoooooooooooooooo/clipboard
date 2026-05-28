@@ -2,10 +2,9 @@ package storage
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/clipboardsync/clipboardsync/pkg/models"
-
-	"github.com/mattn/go-sqlite3"
 )
 
 // Store 存储剪贴板条目（插入前检查哈希去重）
@@ -32,7 +31,7 @@ func (db *DB) Store(entry *models.ClipboardEntry) error {
 	)
 	if err != nil {
 		// 检查是否是唯一约束冲突（并发场景）
-		if sqliteErr, ok := err.(sqlite3.Error); ok && sqliteErr.Code == sqlite3.ErrConstraint {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return fmt.Errorf("duplicate content hash: %s", entry.ContentHash)
 		}
 		return fmt.Errorf("failed to store entry: %w", err)

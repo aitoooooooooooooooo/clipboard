@@ -289,6 +289,61 @@ func TestPairingManagerSignAndVerify(t *testing.T) {
 	}
 }
 
+func TestFindSessionByCode(t *testing.T) {
+	db := setupTestDB(t)
+	pm, err := NewPairingManager(db, "device-1")
+	if err != nil {
+		t.Fatalf("NewPairingManager 失败: %v", err)
+	}
+
+	// 生成配对码
+	code, err := pm.InitiatePairing()
+	if err != nil {
+		t.Fatalf("InitiatePairing 失败: %v", err)
+	}
+
+	// 通过配对码查找会话
+	session, found := pm.FindSessionByCode(code)
+	if !found {
+		t.Fatal("FindSessionByCode 应该找到会话")
+	}
+	if session.Code != code {
+		t.Errorf("配对码不匹配: 期望 %s, 实际 %s", code, session.Code)
+	}
+	if session.DeviceID != "device-1" {
+		t.Errorf("设备 ID 不匹配: 期望 device-1, 实际 %s", session.DeviceID)
+	}
+
+	// 无效配对码
+	_, found = pm.FindSessionByCode("000000")
+	if found {
+		t.Error("无效配对码不应该找到会话")
+	}
+}
+
+func TestFindSessionByCodeExpired(t *testing.T) {
+	db := setupTestDB(t)
+	pm, err := NewPairingManager(db, "device-1")
+	if err != nil {
+		t.Fatalf("NewPairingManager 失败: %v", err)
+	}
+
+	// 手动创建一个已过期的会话
+	pm.mu.Lock()
+	pm.codes["999999"] = &PairingSession{
+		Code:      "999999",
+		ExpiresAt: time.Now().Add(-1 * time.Second),
+		DeviceID:  "device-1",
+	}
+	pm.mu.Unlock()
+
+	// 过期的配对码不应该被找到
+	_, found := pm.FindSessionByCode("999999")
+	if found {
+		t.Error("过期配对码不应该找到会话")
+	}
+}
+
 func TestPairingManagerIsDevicePaired(t *testing.T) {
 	db := setupTestDB(t)
 	pm, err := NewPairingManager(db, "device-1")

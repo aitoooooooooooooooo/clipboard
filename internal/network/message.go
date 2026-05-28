@@ -15,7 +15,9 @@ type MessageType byte
 const (
 	MsgSyncEntry      MessageType = 0x01 // 同步条目
 	MsgAckEntry       MessageType = 0x02 // 确认收到
-	MsgRequestHistory MessageType = 0x03 // 请求历史（MVP 可选）
+	MsgRequestHistory MessageType = 0x03 // 请求历史
+	MsgPairingRequest MessageType = 0x04 // 配对请求
+	MsgPairingAccept  MessageType = 0x05 // 配对确认
 	MsgPing           MessageType = 0x10 // 心跳
 	MsgPong           MessageType = 0x11 // 心跳响应
 )

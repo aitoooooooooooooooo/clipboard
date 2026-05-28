@@ -172,6 +172,9 @@
         .history-item .meta .source {
             color: #aaa;
         }
+        .history-item .meta .source.remote {
+            color: #4a90d9;
+        }
         .history-item .actions {
             display: flex;
             gap: 4px;
@@ -430,6 +433,19 @@
     <div class="panel" id="panel-devices">
         <div class="content">
             <div class="device-panel">
+                <!-- 发现的设备 -->
+                <div class="device-section">
+                    <h3>🔍 局域网设备</h3>
+                    <p style="font-size: 13px; color: #666; margin-bottom: 12px;">
+                        自动发现局域网内的 ClipboardSync 设备
+                    </p>
+                    <div class="device-list" id="discoveredList">
+                        <div class="empty-state" style="padding: 24px;">
+                            <div>正在搜索...</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 已配对设备列表 -->
                 <div class="device-section">
                     <h3>📱 已配对设备</h3>
@@ -499,6 +515,7 @@
         let currentEntries = [];
         let pairingCountdownTimer = null;
         let pairingCodeValue = '';
+        let localDeviceID = '';
 
         // Tab 切换
         function switchTab(panel) {
@@ -513,6 +530,7 @@
             // 切换到设备面板时刷新设备列表
             if (panel === 'devices') {
                 loadDevices();
+                loadDiscoveredDevices();
             }
         }
 
@@ -520,6 +538,7 @@
         async function loadDeviceID() {
             try {
                 const id = await window.go.gui.App.GetDeviceID();
+                localDeviceID = id;
                 document.getElementById('deviceID').textContent = '设备 ID: ' + id.substring(0, 8) + '...';
             } catch (e) {
                 console.error('获取设备 ID 失败:', e);
@@ -550,6 +569,16 @@
             }
         }
 
+        // 加载发现的设备
+        async function loadDiscoveredDevices() {
+            try {
+                const devices = await window.go.gui.App.GetDiscoveredDevices();
+                renderDiscoveredDevices(devices || []);
+            } catch (e) {
+                console.error('获取发现设备失败:', e);
+            }
+        }
+
         // 渲染设备列表
         function renderDevices(devices) {
             const list = document.getElementById('deviceList');
@@ -558,13 +587,13 @@
                 return;
             }
             list.innerHTML = devices.map(device => {
-                const isOnline = device.status === 'online';
+                const isPaired = device.paired === true;
                 const lastSeen = device.last_seen ? formatRelativeTime(device.last_seen) : '未知';
                 return '<div class="device-item">' +
                     '<div class="device-info">' +
-                        '<div class="device-status ' + (isOnline ? 'online' : '') + '"></div>' +
+                        '<div class="device-status ' + (isPaired ? 'online' : '') + '"></div>' +
                         '<div>' +
-                            '<div class="device-name">' + escapeHtml(device.name || '未命名设备') + '</div>' +
+                            '<div class="device-name">' + escapeHtml(device.display_name || '未命名设备') + '</div>' +
                             '<div class="device-time">最后在线: ' + lastSeen + '</div>' +
                         '</div>' +
                     '</div>' +
@@ -573,6 +602,35 @@
                         '移除</button>' +
                     '</div>';
             }).join('');
+        }
+
+        // 渲染发现的设备
+        function renderDiscoveredDevices(devices) {
+            const list = document.getElementById('discoveredList');
+            if (devices.length === 0) {
+                list.innerHTML = '<div class="empty-state" style="padding: 24px;"><div>未发现其他设备</div></div>';
+                return;
+            }
+            list.innerHTML = devices.map(device => {
+                return '<div class="device-item">' +
+                    '<div class="device-info">' +
+                        '<div class="device-status online"></div>' +
+                        '<div>' +
+                            '<div class="device-name">' + escapeHtml(device.device_id.substring(0, 12) + '...') + '</div>' +
+                            '<div class="device-time">' + escapeHtml(device.address) + ':' + device.port + '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<button onclick="switchToPairing()" ' +
+                        'style="padding: 4px 10px; border: none; border-radius: 4px; background: #4a90d9; color: #fff; font-size: 12px; cursor: pointer;">' +
+                        '配对</button>' +
+                    '</div>';
+            }).join('');
+        }
+
+        // 切换到配对区域
+        function switchToPairing() {
+            document.getElementById('pairingInput').focus();
+            showToast('请在下方输入对方显示的配对码');
         }
 
         // 生成配对码
@@ -686,6 +744,19 @@
             loadHistory();
         }
 
+        // 将 base64 payload 解码为 UTF-8 字符串
+        function decodePayload(base64) {
+            if (!base64) return '';
+            try {
+                const bytes = atob(base64);
+                const uint8 = Uint8Array.from(bytes, c => c.charCodeAt(0));
+                return new TextDecoder('utf-8').decode(uint8);
+            } catch (e) {
+                // 降级：直接返回 base64 解码结果（兼容非 UTF-8 内容）
+                return atob(base64);
+            }
+        }
+
         // 渲染历史列表
         function renderHistory(entries) {
             const list = document.getElementById('historyList');
@@ -695,55 +766,57 @@
             }
             list.innerHTML = entries.map(entry => {
                 const time = formatRelativeTime(entry.timestamp);
-                const source = entry.source_device ? entry.source_device.substring(0, 8) + '...' : '本地';
+                const isLocal = !entry.source_device || entry.source_device === localDeviceID;
+                const source = isLocal ? '本地' : '🌐 ' + entry.source_device.substring(0, 8) + '...';
                 let preview = '';
                 let typeClass = '';
 
                 if (entry.content_type === 'text') {
-                    const text = atob(entry.payload || '');
+                    const text = decodePayload(entry.payload);
                     preview = escapeHtml(text.substring(0, 200));
                     if (text.length > 200) preview += '...';
                 } else if (entry.content_type === 'image') {
                     const size = entry.payload ? Math.round(atob(entry.payload).length * 0.75 / 1024) : 0;
-                    preview = '🖼️ 图片 (' + size + ' KB)';
+                    preview = '<img src="data:image/png;base64,' + entry.payload + '" ' +
+                        'style="max-height:60px;max-width:200px;border-radius:4px;vertical-align:middle;" ' +
+                        'onerror="this.outerHTML=\'🖼️ 图片 (' + size + ' KB)\'">' +
+                        ' <span style="color:#888;font-size:12px;">(' + size + ' KB)</span>';
                     typeClass = 'type-image';
                 } else if (entry.content_type === 'file') {
-                    preview = '📄 ' + escapeHtml(entry.payload || '文件');
+                    const filePath = decodePayload(entry.payload);
+                    const fileName = filePath.split(/[/\\]/).pop() || filePath;
+                    preview = '📄 ' + escapeHtml(fileName);
+                    if (filePath !== fileName) {
+                        preview += '<span style="color:#aaa;font-size:11px;margin-left:4px;">' +
+                            escapeHtml(filePath.substring(0, filePath.length - fileName.length)) + '</span>';
+                    }
                     typeClass = 'type-file';
                 } else {
                     preview = '[' + entry.content_type + ']';
                 }
 
-                return '<div class="history-item">' +
+                return '<div class="history-item" onclick="copyEntry(\'' + entry.id + '\')" style="cursor:pointer;">' +
                     '<div class="content-preview ' + typeClass + '">' + preview + '</div>' +
                     '<div class="meta">' +
                         '<span>' + time + '</span>' +
-                        '<span class="source">' + source + '</span>' +
+                        '<span class="source' + (isLocal ? '' : ' remote') + '">' + source + '</span>' +
                     '</div>' +
                     '<div class="actions">' +
-                        '<button class="primary" onclick="copyEntry(\'' + entry.id + '\')">复制</button>' +
-                        '<button class="danger" onclick="deleteEntry(\'' + entry.id + '\')">删除</button>' +
+                        '<button class="primary" onclick="event.stopPropagation();copyEntry(\'' + entry.id + '\')">复制</button>' +
+                        '<button class="danger" onclick="event.stopPropagation();deleteEntry(\'' + entry.id + '\')">删除</button>' +
                     '</div>' +
                     '</div>';
             }).join('');
         }
 
-        // 复制条目到剪贴板
+        // 复制条目到剪贴板（通过后端，支持文本/图片/文件）
         async function copyEntry(id) {
             try {
-                const entry = currentEntries.find(e => e.id === id);
-                if (!entry) return;
-
-                if (entry.content_type === 'text') {
-                    const text = atob(entry.payload || '');
-                    await navigator.clipboard.writeText(text);
-                    showToast('已复制到剪贴板');
-                } else {
-                    showToast('暂不支持复制此类型');
-                }
+                await window.go.gui.App.CopyEntryToClipboard(id);
+                showToast('已复制到剪贴板', 'success');
             } catch (e) {
                 console.error('复制失败:', e);
-                showToast('复制失败');
+                showToast('复制失败: ' + (e.message || '未知错误'), 'error');
             }
         }
 
@@ -844,13 +917,42 @@
 
         // 自动刷新
         function startAutoRefresh() {
-            refreshTimer = setInterval(loadHistory, 5000);
+            refreshTimer = setInterval(() => {
+                loadHistory();
+                // 如果设备面板可见，也刷新发现的设备
+                if (document.getElementById('panel-devices').classList.contains('active')) {
+                    loadDiscoveredDevices();
+                }
+            }, 5000);
         }
 
         // 初始化
-        loadDeviceID();
-        loadHistory();
-        startAutoRefresh();
+        initApp();
+
+        async function initApp() {
+            // 检查后端启动是否有错误
+            try {
+                const startupErr = await window.go.gui.App.GetStartupError();
+                if (startupErr) {
+                    document.getElementById('historyList').innerHTML =
+                        '<div class="empty-state"><div class="icon">⚠️</div>' +
+                        '<div style="color:#c33;font-weight:600;">启动失败</div>' +
+                        '<div style="font-size:13px;color:#666;margin-top:8px;max-width:400px;word-break:break-all;">' +
+                        escapeHtml(startupErr) + '</div></div>';
+                    return;
+                }
+            } catch (e) {
+                console.error('获取启动状态失败:', e);
+            }
+
+            loadDeviceID();
+            loadHistory().catch(e => {
+                console.error('初始化加载失败:', e);
+                document.getElementById('historyList').innerHTML =
+                    '<div class="empty-state"><div class="icon">⚠️</div><div>加载失败: ' + escapeHtml(e.message || '未知错误') + '</div></div>';
+            });
+            startAutoRefresh();
+        }
     </script>
 </body>
 </html>

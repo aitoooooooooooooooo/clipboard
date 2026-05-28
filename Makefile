@@ -1,21 +1,28 @@
-.PHONY: build build-mac build-windows clean test
+.PHONY: help dev build mac windows all clean test
 
-# 默认构建当前平台
-build:
-	go build -o bin/clipboardsync ./cmd/clipboardsync/
+help: ## 显示帮助
+	@echo ""
+	@echo "  ClipboardSync 构建命令"
+	@echo "  ─────────────────────────────────"
+	@echo ""
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36mmake %-10s\033[0m %s\n", $$1, $$2}'
+	@echo ""
 
-# macOS 构建
-build-mac:
-	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -o bin/clipboardsync-darwin-amd64 ./cmd/clipboardsync/
+dev: ## 开发模式（热重载窗口）
+	wails dev
 
-# Windows 交叉编译（需要 mingw-w64 工具链）
-build-windows:
-	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=x86_64-w64-mingw32-gcc go build -o bin/clipboardsync-windows-amd64.exe ./cmd/clipboardsync/
+build: mac ## 打包当前平台（等同于 make mac）
 
-# 运行测试
-test:
+mac: ## 打包 macOS 版本
+	wails build -platform darwin/universal -clean
+
+windows: ## 打包 Windows 版本
+	wails build -platform windows/amd64 -clean
+
+all: mac windows ## 同时打包 Mac 和 Windows 版本
+
+test: ## 运行测试
 	go test ./... -v
 
-# 清理构建产物
-clean:
-	rm -rf bin/
+clean: ## 清理构建产物
+	rm -rf bin/ build/

@@ -10,7 +10,7 @@ import (
 func (db *DB) Search(query string, limit int) ([]*models.ClipboardEntry, error) {
 	sqlQuery := `SELECT id, content_type, content_hash, payload, source_device, timestamp, size
 				 FROM clipboard_entries
-				 WHERE content_type = 'text' AND payload LIKE ?
+				 WHERE content_type = 'text' AND CAST(payload AS TEXT) LIKE ?
 				 ORDER BY timestamp DESC LIMIT ?`
 
 	rows, err := db.conn.Query(sqlQuery, "%"+query+"%", limit)

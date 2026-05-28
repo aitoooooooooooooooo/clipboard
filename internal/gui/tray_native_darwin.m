@@ -34,105 +34,127 @@ void traySetCallback(MenuItemCallback cb) {
 
 static TrayMenuHandler *handler = nil;
 
-// 创建状态栏项
+// 创建状态栏项（必须在主线程执行）
 void trayCreateStatusItem() {
     if (statusItem != nil) return;
 
-    handler = [[TrayMenuHandler alloc] init];
-    statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
-    trayMenu = [[NSMenu alloc] init];
-    [trayMenu setAutoenablesItems:FALSE];
-    [statusItem setMenu:trayMenu];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (statusItem != nil) return;
 
-    // 设置默认标题
-    [statusItem.button setTitle:@"CS"];
+        handler = [[TrayMenuHandler alloc] init];
+        statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
+        trayMenu = [[NSMenu alloc] init];
+        [trayMenu setAutoenablesItems:FALSE];
+        [statusItem setMenu:trayMenu];
+
+        // 设置默认标题
+        [statusItem.button setTitle:@"CS"];
+    });
 }
 
-// 设置标题
+// 设置标题（必须在主线程执行）
 void traySetTitle(const char* title) {
-    if (statusItem != nil) {
-        NSString *nsTitle = [[NSString alloc] initWithCString:title encoding:NSUTF8StringEncoding];
+    if (statusItem == nil) return;
+
+    NSString *nsTitle = [[NSString alloc] initWithCString:title encoding:NSUTF8StringEncoding];
+    dispatch_async(dispatch_get_main_queue(), ^{
         [statusItem.button setTitle:nsTitle];
-    }
+    });
 }
 
-// 设置模板图标
+// 设置模板图标（必须在主线程执行）
 void traySetTemplateIcon(const char* iconData, int length) {
-    if (statusItem != nil && iconData != NULL && length > 0) {
-        NSData *data = [[NSData alloc] initWithBytes:iconData length:length];
+    if (iconData == NULL || length <= 0) return;
+
+    NSData *data = [[NSData alloc] initWithBytes:iconData length:length];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (statusItem == nil) return;
         NSImage *image = [[NSImage alloc] initWithData:data];
         if (image != nil) {
             [image setTemplate:YES];
             [statusItem.button setImage:image];
         }
-    }
+    });
 }
 
-// 添加菜单项
+// 添加菜单项（必须在主线程执行）
 int trayAddMenuItem(const char* title, const char* tooltip, int disabled) {
     if (trayMenu == nil) return -1;
 
     NSString *nsTitle = [[NSString alloc] initWithCString:title encoding:NSUTF8StringEncoding];
     NSString *nsTooltip = [[NSString alloc] initWithCString:tooltip encoding:NSUTF8StringEncoding];
+    int tag = menuItemCount++;
 
-    NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:nsTitle
-                                                  action:@selector(menuItemSelected:)
-                                           keyEquivalent:@""];
-    [item setTarget:handler];
-    [item setTag:menuItemCount];
-    [item setToolTip:nsTooltip];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (trayMenu == nil) return;
 
-    if (disabled) {
-        [item setEnabled:NO];
-    }
+        NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:nsTitle
+                                                      action:@selector(menuItemSelected:)
+                                               keyEquivalent:@""];
+        [item setTarget:handler];
+        [item setTag:tag];
+        [item setToolTip:nsTooltip];
 
-    [trayMenu addItem:item];
-    return menuItemCount++;
+        if (disabled) {
+            [item setEnabled:NO];
+        }
+
+        [trayMenu addItem:item];
+    });
+
+    return tag;
 }
 
-// 添加分隔符
+// 添加分隔符（必须在主线程执行）
 void trayAddSeparator() {
-    if (trayMenu != nil) {
-        [trayMenu addItem:[NSMenuItem separatorItem]];
-    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (trayMenu != nil) {
+            [trayMenu addItem:[NSMenuItem separatorItem]];
+        }
+    });
 }
 
-// 更新菜单项标题
+// 更新菜单项标题（必须在主线程执行）
 void trayUpdateMenuItemTitle(int menuId, const char* title) {
-    if (trayMenu != nil) {
+    NSString *nsTitle = [[NSString alloc] initWithCString:title encoding:NSUTF8StringEncoding];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (trayMenu == nil) return;
         NSMenuItem *item = [trayMenu itemWithTag:menuId];
         if (item != nil) {
-            NSString *nsTitle = [[NSString alloc] initWithCString:title encoding:NSUTF8StringEncoding];
             [item setTitle:nsTitle];
         }
-    }
+    });
 }
 
-// 设置菜单项选中状态
+// 设置菜单项选中状态（必须在主线程执行）
 void traySetMenuItemChecked(int menuId, int checked) {
-    if (trayMenu != nil) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (trayMenu == nil) return;
         NSMenuItem *item = [trayMenu itemWithTag:menuId];
         if (item != nil) {
             [item setState:checked ? NSControlStateValueOn : NSControlStateValueOff];
         }
-    }
+    });
 }
 
-// 设置菜单项启用状态
+// 设置菜单项启用状态（必须在主线程执行）
 void traySetMenuItemEnabled(int menuId, int enabled) {
-    if (trayMenu != nil) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (trayMenu == nil) return;
         NSMenuItem *item = [trayMenu itemWithTag:menuId];
         if (item != nil) {
             [item setEnabled:enabled ? YES : NO];
         }
-    }
+    });
 }
 
-// 销毁状态栏项
+// 销毁状态栏项（必须在主线程执行）
 void trayDestroyStatusItem() {
-    if (statusItem != nil) {
-        [[NSStatusBar systemStatusBar] removeStatusItem:statusItem];
-        statusItem = nil;
-        trayMenu = nil;
-    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (statusItem != nil) {
+            [[NSStatusBar systemStatusBar] removeStatusItem:statusItem];
+            statusItem = nil;
+            trayMenu = nil;
+        }
+    });
 }
