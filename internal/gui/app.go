@@ -91,16 +91,16 @@ func (a *App) Shutdown(ctx context.Context) {
 	if a.stopCh != nil {
 		close(a.stopCh)
 	}
-	a.discoverWg.Wait()
 
+	// 立即停止各组件，不等待发现循环（避免关闭卡住）
+	if a.discovery != nil {
+		a.discovery.Stop()
+	}
 	if a.watcher != nil {
 		a.watcher.Stop()
 	}
 	if a.tlsServer != nil {
 		a.tlsServer.Stop()
-	}
-	if a.discovery != nil {
-		a.discovery.Stop()
 	}
 	if a.connMgr != nil {
 		a.connMgr.Close()
@@ -210,7 +210,7 @@ func (a *App) initServices() error {
 	})
 
 	// 初始化剪贴板监听器
-	a.watcher = clipboard.NewWatcher(1000 * time.Millisecond)
+	a.watcher = clipboard.NewWatcher(500 * time.Millisecond)
 	a.watcher.SetOnChange(func(event *clipboard.ClipboardEvent) {
 		entry := &models.ClipboardEntry{
 			ID:           uuid.New().String(),

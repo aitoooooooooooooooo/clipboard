@@ -19,30 +19,23 @@ func hideWindow(cmd *exec.Cmd) {
 
 // readClipboard 读取当前剪贴板内容
 // Windows 使用 powershell，支持文本和文件路径
+// 使用单次 PowerShell 调用减少延迟
 func readClipboard() ([]byte, error) {
-	// 先尝试获取文本内容（强制 UTF-8 输出）
-	cmd := exec.Command("powershell", "-NoProfile", "-Command",
-		"[Console]::OutputEncoding = [Text.Encoding]::UTF8; Get-Clipboard")
+	script := `[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$text = Get-Clipboard 2>$null
+if ($text) { $text } else {
+	$files = Get-Clipboard -Format FileDropList 2>$null
+	if ($files) { $files | ForEach-Object { $_.FullName } }
+}`
+	cmd := exec.Command("powershell", "-NoProfile", "-Command", script)
 	hideWindow(cmd)
 	out, err := cmd.Output()
-	if err == nil {
-		trimmed := strings.TrimRight(string(out), "\r\n")
-		if trimmed != "" {
-			return []byte(trimmed), nil
-		}
+	if err != nil {
+		return nil, fmt.Errorf("读取剪贴板失败: %w", err)
 	}
-
-	// 文本为空时，尝试获取文件路径列表（CF_HDROP 格式）
-	cmd2 := exec.Command("powershell", "-NoProfile", "-Command",
-		"[Console]::OutputEncoding = [Text.Encoding]::UTF8; Get-Clipboard -Format FileDropList | ForEach-Object { $_.FullName }")
-	hideWindow(cmd2)
-	out2, err2 := cmd2.Output()
-	if err2 == nil {
-		trimmed := strings.TrimRight(string(out2), "\r\n")
-		if trimmed != "" {
-			return []byte(trimmed), nil
-		}
+	trimmed := strings.TrimRight(string(out), "\r\n")
+	if trimmed == "" {
+		return nil, fmt.Errorf("剪贴板为空或不支持的格式")
 	}
-
-	return nil, fmt.Errorf("剪贴板为空或不支持的格式")
+	return []byte(trimmed), nil
 }
