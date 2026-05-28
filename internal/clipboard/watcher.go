@@ -14,14 +14,16 @@ type Watcher struct {
 	stopCh   chan struct{}
 	mu       sync.Mutex
 	running  bool
+	clipState *clipboardState // 平台特定的剪贴板状态（Windows 用序列号加速）
 }
 
 // NewWatcher 创建监听器
-// interval 为轮询间隔，建议 1000ms
+// interval 为轮询间隔，建议 500ms
 func NewWatcher(interval time.Duration) *Watcher {
 	return &Watcher{
-		interval: interval,
-		stopCh:   make(chan struct{}),
+		interval:  interval,
+		stopCh:    make(chan struct{}),
+		clipState: newClipboardState(),
 	}
 }
 
@@ -83,7 +85,13 @@ func (w *Watcher) poll() {
 }
 
 // check 检查剪贴板是否变化
+// Windows 使用序列号快速检测（微秒级），macOS 直接读取比较
 func (w *Watcher) check() {
+	// 平台快速检测：Windows 用序列号，macOS 始终返回 true
+	if !w.clipState.changed() {
+		return
+	}
+
 	data, err := readClipboard()
 	if err != nil {
 		slog.Debug("读取剪贴板失败", "error", err)

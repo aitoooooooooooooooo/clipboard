@@ -77,6 +77,9 @@ func (a *App) Startup(ctx context.Context) {
 	// 启动网络层（TLS + mDNS 广播 + 设备发现）
 	a.startNetworking()
 
+	// 始终启动剪贴板监听（历史记录功能独立于同步开关）
+	a.watcher.Start()
+
 	slog.Info("应用启动完成", "device_id", a.deviceID)
 }
 
@@ -210,7 +213,7 @@ func (a *App) initServices() error {
 	})
 
 	// 初始化剪贴板监听器
-	a.watcher = clipboard.NewWatcher(500 * time.Millisecond)
+	a.watcher = clipboard.NewWatcher(200 * time.Millisecond)
 	a.watcher.SetOnChange(func(event *clipboard.ClipboardEvent) {
 		entry := &models.ClipboardEntry{
 			ID:           uuid.New().String(),
@@ -404,20 +407,16 @@ func (a *App) startNetworking() {
 
 // --- 同步控制 ---
 
-// ToggleSync 开关剪贴板同步监听
+// ToggleSync 开关剪贴板同步（仅控制是否广播到其他设备，历史记录始终开启）
 func (a *App) ToggleSync(enabled bool) error {
 	if a.watcher == nil {
 		return fmt.Errorf("服务未初始化")
 	}
+	a.syncActive = enabled
 	if enabled {
-		// 启动剪贴板监听
-		a.watcher.Start()
-		a.syncActive = true
-		slog.Info("剪贴板同步已启用")
+		slog.Info("剪贴板同步已启用（广播到其他设备）")
 	} else {
-		a.watcher.Stop()
-		a.syncActive = false
-		slog.Info("剪贴板同步已禁用")
+		slog.Info("剪贴板同步已禁用（仅本地记录）")
 	}
 	return nil
 }
